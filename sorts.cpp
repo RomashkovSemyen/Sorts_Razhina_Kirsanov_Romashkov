@@ -4,6 +4,8 @@
 #include <string>
 #include <random>
 #include <chrono>
+#include <algorithm>
+
 
 // ------------------------------------------------------------
 // Вспомогательная функция для записи шага
@@ -211,29 +213,26 @@ void generateLogs(const std::vector<int>& originalArray, const std::string& outp
 }
 
 int main() {
-    // Параметры генерации исходного массива
-    const int size = 100;                          // количество элементов
-    const int minVal = 0;
-    const int maxVal = 666;
+    const int size = 110;   // количество элементов (атомных номеров)
 
-    // Инициализация генератора случайных чисел
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    std::mt19937 gen(seed);
-    std::uniform_int_distribution<int> dist(minVal, maxVal);
-
+    // Создаём массив с числами от 1 до size
     std::vector<int> original(size);
-    for (int& val : original) {
-        val = dist(gen);
+    for (int i = 0; i < size; ++i) {
+        original[i] = i + 1;   // заполняем 1, 2, 3, ..., size
     }
 
-    // Вывод исходного массива на экран
-    std::cout << "Исходный массив: ";
+    // Перемешиваем массив случайным образом
+    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::shuffle(original.begin(), original.end(), std::mt19937(seed));
+
+    // Вывод исходного массива (можно закомментировать, если не нужно)
+    std::cout << "Исходный массив (атомные номера в случайном порядке):\n";
     for (int v : original) std::cout << v << " ";
     std::cout << std::endl;
 
-    // Генерация логов (файлы создаются в текущей папке)
+    // Генерация логов
     generateLogs(original, ".");
 
-    std::cout << "Готово. Файлы bubble.txt, selection.txt, insertion.txt, quick.txt, merge.txt, heap.txt созданы." << std::endl;
+    std::cout << "Готово. Файлы bubble.txt, selection.txt, ... созданы." << std::endl;
     return 0;
 }
