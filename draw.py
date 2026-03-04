@@ -1,208 +1,156 @@
 import os
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import matplotlib.patches as patches
 
-# Словарь цветов для элементов на основе их наиболее ярких спектральных линий
-# (для первых 20 элементов, где есть надежные данные)
-ELEMENT_COLORS = {
-    1: '#FF4D4D',   # H - красный (656 нм) [citation:1][citation:9]
-    2: '#FFD700',   # He - желтый (587 нм) [citation:9]
-    3: '#FF69B4',   # Li - красный/розовый (671 нм) [citation:9]
-    4: '#C0C0C0',   # Be - серебристый (нет ярких линий в видимом)
-    5: '#32CD32',   # B - зеленый (но слабые линии)
-    6: '#000000',   # C - черный (спектр в УФ)
-    7: '#4169E1',   # N - синий/голубой (500 нм, 463 нм) [citation:9]
-    8: '#1E90FF',   # O - голубой (441 нм) [citation:9]
-    9: '#FFFF00',   # F - желтый (686 нм) [citation:9]
-    10: '#FFA500',  # Ne - оранжевый (640 нм, 585 нм) [citation:9]
-    11: '#FF8C00',  # Na - оранжевый/желтый (589 нм) [citation:1][citation:9]
-    12: '#32CD32',  # Mg - зеленый (518 нм) [citation:9]
-    13: '#C0C0C0',  # Al - серебристый (624 нм линия есть) [citation:9]
-    14: '#808080',  # Si - серый (спектр в основном в УФ)
-    15: '#FFA07A',  # P - светло-оранжевый
-    16: '#FFFF00',  # S - желтый (469 нм) [citation:9]
-    17: '#00FF00',  # Cl - зеленый (482 нм, 480 нм) [citation:9]
-    18: '#9400D3',  # Ar - фиолетовый (696 нм, но чаще фиолетовый) [citation:9]
-    19: '#800080',  # K - фиолетовый (580 нм, 404 нм) [citation:9]
-    20: '#FF6347',  # Ca - красно-оранжевый (644 нм, 422 нм) [citation:9]
-}
-
-def get_element_color(atomic_number):
-    """
-    Возвращает цвет для элемента по его атомному номеру.
-    Для известных элементов - спектральный цвет,
-    для остальных - цвет на основе номера (для визуального разнообразия)
-    """
-    if atomic_number in ELEMENT_COLORS:
-        return ELEMENT_COLORS[atomic_number]
-    else:
-        # Генерируем цвет на основе номера (чтобы все элементы были различимы)
-        # Используем HSV: меняем оттенок, сохраняя насыщенность и яркость
-        hue = (atomic_number * 37) % 360  # 37 - простое число для равномерного распределения
-        return f'hsv({hue}, 70%, 90%)'  # Насыщенность 70%, яркость 90%
-
-def format_element_label(atomic_number):
-    """
-    Форматирует подпись элемента в стиле таблицы Менделеева:
-    верхний индекс - зарядовое число (массовое число, для простоты используем 2*номер),
-    нижний индекс - атомный номер,
-    основной символ - символ элемента.
-    """
-    # Символы элементов (первые 110)
-    symbols = [
-        'H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne',
-        'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
-        'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
-        'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr',
-        'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn',
-        'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd',
-        'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm', 'Yb',
-        'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg',
-        'Tl', 'Pb', 'Bi', 'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th',
-        'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm',
-        'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds'
-    ]
-    
-    if 1 <= atomic_number <= len(symbols):
-        symbol = symbols[atomic_number - 1]
-        # Зарядовое число (массовое) - для простоты используем округленную атомную массу
-        # В реальности нужно брать из таблицы, здесь используем приближение: массовое число ≈ 2 * номер
-        mass_number = atomic_number * 2
-        # Для водорода корректируем
-        if atomic_number == 1:
-            mass_number = 1
-        elif atomic_number == 2:
-            mass_number = 4
-            
-        # Форматируем с использованием LaTeX-стиля (matplotlib поддерживает)
-        return f'$^{{{mass_number}}}_{{{atomic_number}}}{symbol}$'
-    else:
-        return str(atomic_number)
-
-def read_states(filename):
-    """Читает файл, возвращает n и список состояний."""
+def read_single_file(filename):
+    """Читает один файл, возвращает (n, states)."""
     with open(filename, 'r') as f:
         lines = [line.strip() for line in f if line.strip()]
-
     if not lines:
-        raise ValueError("Файл пуст")
-
+        raise ValueError(f"Файл {filename} пуст")
     try:
         n = int(lines[0])
     except ValueError:
-        raise ValueError("Первая строка должна содержать размер массива")
-
+        raise ValueError(f"Первая строка файла {filename} должна содержать размер массива")
     states = []
     for line in lines[1:]:
         parts = line.split()
         if len(parts) != n:
-            print(f"Предупреждение: строка '{line}' содержит {len(parts)} элементов, ожидалось {n}. Пропускаем.")
+            print(f"Предупреждение: файл {filename}, строка '{line}' содержит {len(parts)} элементов, ожидалось {n}. Пропускаем.")
             continue
         try:
             state = list(map(float, parts))
         except ValueError:
-            print(f"Предупреждение: строка '{line}' содержит нечисловые данные. Пропускаем.")
+            print(f"Предупреждение: файл {filename}, строка '{line}' содержит нечисловые данные. Пропускаем.")
             continue
         states.append(state)
-
     if not states:
-        raise ValueError("Нет корректных состояний массива")
-
+        raise ValueError(f"Файл {filename} не содержит корректных состояний")
     return n, states
 
-def plot_histogram(state, global_max, step, output_dir='frames'):
-    """Строит цветную гистограмму с подписями элементов."""
-    n = len(state)
-    indices = range(1, n + 1)
+def read_all_files(file_list):
+    """Читает все файлы, проверяет одинаковость размера, возвращает states_list и n."""
+    all_states = []
+    n_vals = []
+    for fname in file_list:
+        n, states = read_single_file(fname)
+        n_vals.append(n)
+        all_states.append(states)
+    if len(set(n_vals)) != 1:
+        raise ValueError("Размеры массивов в файлах различаются!")
+    return all_states, n_vals[0]
+
+def draw_horizontal_bars(ax, values, global_max, reverse=False, name="", align_title='left'):
+    """
+    Рисует горизонтальную гистограмму зелёного цвета с чёрными границами.
+    Убирает все подписи, тики, сетку и рамки.
+    Добавляет название сортировки в указанном углу: 'left' или 'right'.
+    """
+    n = len(values)
+    indices = list(range(1, n + 1))
     
-    # Создаем фигуру с большим размером для читаемости
-    plt.figure(figsize=(min(20, max(10, n * 0.3)), 8))
+    # Столбцы вплотную друг к другу (height=1.0) с чёрными границами
+    bars = ax.barh(indices, values, height=1.0, color='green', 
+                   edgecolor='black', linewidth=0.5)
+    ax.invert_yaxis()  # первый индекс сверху
     
-    # Строим столбцы с индивидуальными цветами
-    bars = []
-    for i, val in enumerate(state):
-        atomic_number = int(val) if val.is_integer() and 1 <= val <= 110 else None
-        color = get_element_color(atomic_number) if atomic_number else '#808080'  # серый для не-элементов
-        bar = plt.bar(i + 1, val, width=0.8, color=color, edgecolor='black', alpha=0.8)
-        bars.extend(bar)
+    if reverse:
+        ax.set_xlim(global_max, 0)
+    else:
+        ax.set_xlim(0, global_max)
     
-    # Верхняя граница с запасом для подписей
-    y_top = global_max + max(2, global_max * 0.15)  # увеличен запас для двухстрочных подписей
-    plt.ylim(0, y_top)
+    # Убираем всё оформление
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
     
-    # Настройка осей
-    plt.xlabel('Индекс элемента', fontsize=12)
-    plt.ylabel('Значение (атомный номер)', fontsize=12)
-    plt.title(f'Периодическая визуализация сортировки (шаг {step})', fontsize=14, fontweight='bold')
-    plt.grid(axis='y', linestyle='--', alpha=0.3)
+    # Название сортировки в заданном углу
+    if align_title == 'left':
+        ax.text(0.02, 0.98, name, transform=ax.transAxes,
+                ha='left', va='top', fontsize=10, fontweight='bold', color='black')
+    else:  # right
+        ax.text(0.98, 0.98, name, transform=ax.transAxes,
+                ha='right', va='top', fontsize=10, fontweight='bold', color='black')
+
+def create_frame(states_list, step, global_max, output_dir, filenames, max_steps):
+    """
+    Создаёт один кадр с 6 зелёными горизонтальными гистограммами в сетке 3x2.
+    Расстояние между колонками и строками убрано (wspace=0, hspace=0).
+    Надпись с номером шага — в левом нижнем углу всей картинки.
+    Под нижней строкой добавлен коричневый прямоугольник (ствол ёлки),
+    ширина которого уменьшена вдвое (0.075).
+    """
+    fig, axes = plt.subplots(3, 2, figsize=(12, 10),
+                             gridspec_kw={'wspace': 0, 'hspace': 0})
     
-    # Подписи над столбцами
-    for i, val in enumerate(state):
-        atomic_number = int(val) if val.is_integer() and 1 <= val <= 110 else None
-        if atomic_number:
-            label = format_element_label(atomic_number)
-            # Двухстрочная подпись: элемент сверху, число снизу
-            label_y = val + y_top * 0.03
-            plt.text(i + 1, label_y, label, 
-                    ha='center', va='bottom',
-                    fontsize=11, fontweight='bold',
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.7, edgecolor='gray'))
+    # Настраиваем отступы: верх увеличен, низ оставлен для ствола и текста
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.08)
+    
+    for idx, (states, ax, fname) in enumerate(zip(states_list, axes.flat, filenames)):
+        # Текущее состояние (заморозка последнего)
+        if step <= len(states):
+            current_state = states[step - 1]
         else:
-            # Для не-целых или выходящих за диапазон значений
-            label_y = val + y_top * 0.02
-            plt.text(i + 1, label_y, f'{val:.1f}',
-                    ha='center', va='bottom',
-                    fontsize=10, fontweight='normal',
-                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7, edgecolor='gray'))
-    
-    # Добавляем легенду для первых нескольких элементов (если нужно)
-    if step == 1:  # только для первого кадра, чтобы не загромождать
-        legend_elements = []
-        for i, val in enumerate(state[:min(5, len(state))]):  # первые 5 элементов
-            if val.is_integer() and 1 <= int(val) <= 110:
-                atomic_number = int(val)
-                color = get_element_color(atomic_number)
-                symbols = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne']
-                if atomic_number <= len(symbols):
-                    legend_elements.append(mpatches.Patch(color=color, label=f'{atomic_number}: {symbols[atomic_number-1]}'))
+            current_state = states[-1]
         
-        if legend_elements:
-            plt.legend(handles=legend_elements, loc='upper right', fontsize=9, 
-                      title="Элементы", title_fontsize=10)
+        # Левый столбец (чётные индексы) – влево, правый (нечётные) – вправо
+        reverse = (idx % 2 == 0)
+        
+        # Имя файла без расширения
+        short_name = os.path.splitext(os.path.basename(fname))[0]
+        
+        # Определяем положение названия: для idx=1,3,5 (файлы 2,4,6) — правый верхний угол
+        align = 'right' if idx in (1, 3, 5) else 'left'
+        
+        draw_horizontal_bars(ax, current_state, global_max, reverse, short_name, align)
     
-    # Сохраняем
+    # Добавляем коричневый прямоугольник (ствол) под нижней строкой
+    trunk_width = 0.05      # ширина ствола (уменьшена вдвое)
+    trunk_height = 0.06     # высота ствола
+    trunk_x = 0.5 - trunk_width/2  # центрирование
+    trunk_y = 0.02             # нижняя граница ствола (немного выше нижнего края)
+    
+    trunk = patches.Rectangle((trunk_x, trunk_y), trunk_width, trunk_height,
+                              linewidth=0, facecolor='brown')
+    fig.add_artist(trunk)
+    
+    # Текст с номером шага в левом нижнем углу фигуры, ниже ствола
+    fig.text(0.05, 0.01, f'Шаг {step} из {max_steps}',
+             ha='left', va='bottom', fontsize=12, fontweight='bold')
+    
     os.makedirs(output_dir, exist_ok=True)
     filename = os.path.join(output_dir, f'frame_{step:04d}.png')
     plt.savefig(filename, dpi=120, bbox_inches='tight')
     plt.close()
     print(f"Сохранено: {filename}")
 
-def main(input_file, output_dir='frames'):
-    n, states = read_states(input_file)
-    print(f"Размер массива: {n}")
-    print(f"Количество состояний: {len(states)}")
+def main(file_list, output_dir='frames'):
+    all_states, n = read_all_files(file_list)
+    print(f"Размер массивов: {n}")
+    for i, states in enumerate(all_states):
+        print(f"Файл {i+1}: {len(states)} состояний")
     
-    # Проверяем, что значения - целые числа в диапазоне 1-110
-    all_values = [val for state in states for val in state]
-    for val in all_values:
-        if not (val.is_integer() and 1 <= val <= 110):
-            print(f"Предупреждение: значение {val} не является целым числом от 1 до 110")
+    max_steps = max(len(states) for states in all_states)
+    print(f"Максимальное количество шагов: {max_steps}")
     
+    all_values = [val for states in all_states for state in states for val in state]
     global_max = max(all_values)
     print(f"Глобальный максимум: {global_max}")
     
-    for i, state in enumerate(states, start=1):
-        plot_histogram(state, global_max, i, output_dir)
+    for step in range(1, max_steps + 1):
+        create_frame(all_states, step, global_max, output_dir, file_list, max_steps)
     
-    print(f"Готово! {len(states)} изображений сохранено в папке '{output_dir}'")
+    print(f"Готово! {max_steps} изображений сохранено в папке '{output_dir}'")
 
 if __name__ == '__main__':
     import sys
-    if len(sys.argv) < 2:
-        print("Использование: python script.py <имя_файла> [выходная_папка]")
-        print("Пример: python script.py sorting_states.txt frames")
+    if len(sys.argv) < 7:
+        print("Использование: python script.py <файл1> <файл2> <файл3> <файл4> <файл5> <файл6> [выходная_папка]")
         sys.exit(1)
-    
-    input_file = sys.argv[1]
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else 'frames'
-    main(input_file, output_dir)
+    input_files = sys.argv[1:7]
+    output_dir = sys.argv[7] if len(sys.argv) > 7 else 'frames'
+    main(input_files, output_dir)
