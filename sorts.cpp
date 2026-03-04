@@ -7,17 +7,10 @@
 #include <algorithm>
 
 
-// ------------------------------------------------------------
-// Вспомогательная функция для записи шага
-// ------------------------------------------------------------
+// запись шага
 void recordStep(const std::vector<int>& arr, std::vector<std::vector<int>>& steps) {
     steps.push_back(arr);
 }
-
-// ------------------------------------------------------------
-// Сортировки
-// ------------------------------------------------------------
-
 // Сортировка пузырьком
 void bubbleSort(std::vector<int>& arr, std::vector<std::vector<int>>& steps) {
     int n = arr.size();
@@ -64,7 +57,7 @@ void insertionSort(std::vector<int>& arr, std::vector<std::vector<int>>& steps) 
     }
 }
 
-// Быстрая сортировка (вспомогательная функция partition)
+// Быстрая сортировка 
 int partition(std::vector<int>& arr, int low, int high, std::vector<std::vector<int>>& steps) {
     int pivot = arr[high];
     int i = low - 1;
@@ -88,7 +81,7 @@ void quickSort(std::vector<int>& arr, int low, int high, std::vector<std::vector
     }
 }
 
-// Сортировка слиянием (вспомогательная функция merge)
+// Сортировка слиянием
 void merge(std::vector<int>& arr, int left, int mid, int right, std::vector<std::vector<int>>& steps) {
     std::vector<int> L(arr.begin() + left, arr.begin() + mid + 1);
     std::vector<int> R(arr.begin() + mid + 1, arr.begin() + right + 1);
@@ -127,7 +120,7 @@ void mergeSort(std::vector<int>& arr, int left, int right, std::vector<std::vect
     }
 }
 
-// Пирамидальная сортировка (вспомогательная функция heapify)
+// сортировка кучей
 void heapify(std::vector<int>& arr, int n, int i, std::vector<std::vector<int>>& steps) {
     int largest = i;
     int left = 2 * i + 1;
@@ -150,12 +143,9 @@ void heapify(std::vector<int>& arr, int n, int i, std::vector<std::vector<int>>&
 void heapSort(std::vector<int>& arr, std::vector<std::vector<int>>& steps) {
     int n = arr.size();
 
-    // Построение кучи
     for (int i = n / 2 - 1; i >= 0; --i) {
         heapify(arr, n, i, steps);
     }
-
-    // Извлечение элементов
     for (int i = n - 1; i > 0; --i) {
         std::swap(arr[0], arr[i]);
         recordStep(arr, steps);
@@ -163,11 +153,8 @@ void heapSort(std::vector<int>& arr, std::vector<std::vector<int>>& steps) {
     }
 }
 
-// ------------------------------------------------------------
 // Генерация файлов для всех сортировок
-// ------------------------------------------------------------
 void generateLogs(const std::vector<int>& originalArray, const std::string& outputDir = ".") {
-    // Пары: имя сортировки -> указатель на функцию, выполняющую сортировку
     std::vector<std::pair<std::string, void(*)(std::vector<int>&, std::vector<std::vector<int>>&)>> sorts = {
         {"bubble", bubbleSort},
         {"selection", selectionSort},
@@ -182,12 +169,11 @@ void generateLogs(const std::vector<int>& originalArray, const std::string& outp
     };
 
     for (const auto& [name, sortFunc] : sorts) {
-        std::vector<int> arr = originalArray;               // копируем исходный массив
-        std::vector<std::vector<int>> steps;                // здесь будут храниться все шаги
-        recordStep(arr, steps);                              // записываем начальное состояние (шаг 0)
-        sortFunc(arr, steps);                                // выполняем сортировку, шаги добавляются внутри
+        std::vector<int> arr = originalArray;               
+        std::vector<std::vector<int>> steps;                
+        recordStep(arr, steps);                              
+        sortFunc(arr, steps);                                
 
-        // Формируем имя файла
         std::string filename = outputDir + "/" + name + ".txt";
         if (outputDir == ".") filename = name + ".txt";
 
@@ -196,8 +182,6 @@ void generateLogs(const std::vector<int>& originalArray, const std::string& outp
             std::cerr << "Не удалось создать файл: " << filename << std::endl;
             continue;
         }
-
-        // Записываем размер массива и все шаги
         out << arr.size() << "\n";
         for (const auto& state : steps) {
             for (size_t i = 0; i < state.size(); ++i) {
@@ -213,26 +197,15 @@ void generateLogs(const std::vector<int>& originalArray, const std::string& outp
 }
 
 int main() {
-    const int size = 110;   // количество элементов (атомных номеров)
-
-    // Создаём массив с числами от 1 до size
+    const int size = 10;
     std::vector<int> original(size);
     for (int i = 0; i < size; ++i) {
-        original[i] = i + 1;   // заполняем 1, 2, 3, ..., size
+        original[i] = i + 1;
     }
 
-    // Перемешиваем массив случайным образом
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::shuffle(original.begin(), original.end(), std::mt19937(seed));
-
-    // Вывод исходного массива (можно закомментировать, если не нужно)
-    std::cout << "Исходный массив (атомные номера в случайном порядке):\n";
     for (int v : original) std::cout << v << " ";
-    std::cout << std::endl;
-
-    // Генерация логов
     generateLogs(original, ".");
-
-    std::cout << "Готово. Файлы bubble.txt, selection.txt, ... созданы." << std::endl;
     return 0;
 }
