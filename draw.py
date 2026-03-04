@@ -1,35 +1,31 @@
 import os
+import sys
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import numpy as np
 
 def read_single_file(filename):
-    """Читает один файл, возвращает (n, states)."""
-    with open(filename, 'r') as f:
+    """Читает файл данных: первая строка N, далее строки по N чисел."""
+    with open(filename, 'r', encoding='utf-8') as f:
         lines = [line.strip() for line in f if line.strip()]
     if not lines:
         raise ValueError(f"Файл {filename} пуст")
     try:
         n = int(lines[0])
     except ValueError:
-        raise ValueError(f"Первая строка файла {filename} должна содержать размер массива")
+        raise ValueError(f"Первая строка файла {filename} должна быть числом N")
+    
     states = []
     for line in lines[1:]:
         parts = line.split()
-        if len(parts) != n:
-            print(f"Предупреждение: файл {filename}, строка '{line}' содержит {len(parts)} элементов, ожидалось {n}. Пропускаем.")
-            continue
-        try:
-            state = list(map(float, parts))
-        except ValueError:
-            print(f"Предупреждение: файл {filename}, строка '{line}' содержит нечисловые данные. Пропускаем.")
-            continue
-        states.append(state)
-    if not states:
-        raise ValueError(f"Файл {filename} не содержит корректных состояний")
+        if len(parts) == n:
+            try:
+                states.append(list(map(float, parts)))
+            except ValueError:
+                continue
     return n, states
 
 def read_all_files(file_list):
-    """Читает все файлы, проверяет одинаковость размера, возвращает states_list и n."""
     all_states = []
     n_vals = []
     for fname in file_list:
@@ -37,120 +33,99 @@ def read_all_files(file_list):
         n_vals.append(n)
         all_states.append(states)
     if len(set(n_vals)) != 1:
-        raise ValueError("Размеры массивов в файлах различаются!")
+        raise ValueError("Размеры массивов в файлах должны быть одинаковыми!")
     return all_states, n_vals[0]
 
-def draw_horizontal_bars(ax, values, global_max, reverse=False, name="", align_title='left'):
-    """
-    Рисует горизонтальную гистограмму зелёного цвета с чёрными границами.
-    Убирает все подписи, тики, сетку и рамки.
-    Добавляет название сортировки в указанном углу: 'left' или 'right'.
-    """
+def draw_branch(ax, values, global_max, scale, color, reverse=False, name=""):
+    """Рисует одну сторону веток (левую или правую)."""
     n = len(values)
     indices = list(range(1, n + 1))
     
-    # Столбцы вплотную друг к другу (height=1.0) с чёрными границами
-    bars = ax.barh(indices, values, height=1.0, color='green', 
-                   edgecolor='black', linewidth=0.5)
-    ax.invert_yaxis()  # первый индекс сверху
+    # Рисуем столбцы (zorder=3 — поверх ствола)
+    ax.barh(indices, values, height=1.0, color=color, 
+            edgecolor='#002200', linewidth=0.4, zorder=3)
     
+    ax.invert_yaxis()
+    
+    # Ограничение оси X создает эффект сужения
+    ax.set_xlim(0, global_max / scale)
     if reverse:
-        ax.set_xlim(global_max, 0)
-    else:
-        ax.set_xlim(0, global_max)
+        ax.set_xlim(ax.get_xlim()[1], 0)
     
-    # Убираем всё оформление
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_xlabel('')
-    ax.set_ylabel('')
-    ax.grid(False)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-    
-    # Название сортировки в заданном углу
-    if align_title == 'left':
-        ax.text(0.02, 0.98, name, transform=ax.transAxes,
-                ha='left', va='top', fontsize=10, fontweight='bold', color='black')
-    else:  # right
-        ax.text(0.98, 0.98, name, transform=ax.transAxes,
-                ha='right', va='top', fontsize=10, fontweight='bold', color='black')
+    ax.axis('off')
+    ax.set_facecolor('none')
 
+    # 🎬 ПОДПИСЬ АЛГОРИТМА — УВЕЛИЧЕННЫЙ ШРИФТ
+    ax.text(0.95 if not reverse else 0.05, 0.95, name, transform=ax.transAxes,
+            ha='right' if not reverse else 'left', va='top', 
+            fontsize=16, fontweight='bold', color='white', alpha=0.9)  # Было: 9, alpha=0.4
 def create_frame(states_list, step, global_max, output_dir, filenames, max_steps):
-    """
-    Создаёт один кадр с 6 зелёными горизонтальными гистограммами в сетке 3x2.
-    Расстояние между колонками и строками убрано (wspace=0, hspace=0).
-    Надпись с номером шага — в левом нижнем углу всей картинки.
-    Под нижней строкой добавлен коричневый прямоугольник (ствол ёлки),
-    ширина которого уменьшена вдвое (0.075).
-    """
-    fig, axes = plt.subplots(3, 2, figsize=(12, 10),
-                             gridspec_kw={'wspace': 0, 'hspace': 0})
+    # Фон всей картинки — темно-серый/черный
+    fig = plt.figure(figsize=(10, 12), facecolor='#111111')
     
-    # Настраиваем отступы: верх увеличен, низ оставлен для ствола и текста
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.92, bottom=0.08)
+    # 🎬 GridSpec с явным отступом сверху (15% фигуры свободно)
+    gs = fig.add_gridspec(3, 2, hspace=0, wspace=0,
+                          top=0.85, bottom=0.05, left=0.05, right=0.95)
     
-    for idx, (states, ax, fname) in enumerate(zip(states_list, axes.flat, filenames)):
-        # Текущее состояние (заморозка последнего)
-        if step <= len(states):
-            current_state = states[step - 1]
-        else:
-            current_state = states[-1]
-        
-        # Левый столбец (чётные индексы) – влево, правый (нечётные) – вправо
-        reverse = (idx % 2 == 0)
-        
-        # Имя файла без расширения
-        short_name = os.path.splitext(os.path.basename(fname))[0]
-        
-        # Определяем положение названия: для idx=1,3,5 (файлы 2,4,6) — правый верхний угол
-        align = 'right' if idx in (1, 3, 5) else 'left'
-        
-        draw_horizontal_bars(ax, current_state, global_max, reverse, short_name, align)
-    
-    # Добавляем коричневый прямоугольник (ствол) под нижней строкой
-    trunk_width = 0.05      # ширина ствола (уменьшена вдвое)
-    trunk_height = 0.06     # высота ствола
-    trunk_x = 0.5 - trunk_width/2  # центрирование
-    trunk_y = 0.02             # нижняя граница ствола (немного выше нижнего края)
-    
-    trunk = patches.Rectangle((trunk_x, trunk_y), trunk_width, trunk_height,
-                              linewidth=0, facecolor='brown')
+    axes = np.empty((3, 2), dtype=object)
+    for i in range(3):
+        for j in range(2):
+            axes[i, j] = fig.add_subplot(gs[i, j])
+
+    # Параметры ярусов
+    tier_colors = ['#4CAF50', '#388E3C', '#1B5E20']
+    tier_scales = [0.7, 0.8, 0.9]
+
+    # --- СТВОЛ ---
+    trunk_width = 0.035
+    # Ствол заканчивается на y=0.85 (граница зоны монтажа)
+    trunk = patches.Rectangle((0.5 - trunk_width/2, 0.05), trunk_width, 0.80,
+                             transform=fig.transFigure, color='#3D2314', 
+                             zorder=0)
     fig.add_artist(trunk)
+
+    for idx, (states, ax, fname) in enumerate(zip(states_list, axes.flat, filenames)):
+        ax.patch.set_alpha(0)
+        ax.set_zorder(2)
+        
+        row = idx // 2
+        is_left = (idx % 2 == 0)
+        
+        current_state = states[step - 1] if step <= len(states) else states[-1]
+        name = os.path.splitext(os.path.basename(fname))[0]
+        
+        draw_branch(ax, current_state, global_max, 
+                    tier_scales[row], tier_colors[row], 
+                    reverse=is_left, name=name)
     
-    # Текст с номером шага в левом нижнем углу фигуры, ниже ствола
-    fig.text(0.05, 0.01, f'Шаг {step} из {max_steps}',
-             ha='left', va='bottom', fontsize=12, fontweight='bold')
-    
+    # Текст внизу
+    fig.text(0.5, 0.02, f"Шаг {step} / {max_steps}", ha='center', 
+             color='white', fontsize=10, alpha=0.5, zorder=4)
+
     os.makedirs(output_dir, exist_ok=True)
-    filename = os.path.join(output_dir, f'frame_{step:04d}.png')
-    plt.savefig(filename, dpi=120, bbox_inches='tight')
-    plt.close()
-    print(f"Сохранено: {filename}")
-
-def main(file_list, output_dir='frames'):
-    all_states, n = read_all_files(file_list)
-    print(f"Размер массивов: {n}")
-    for i, states in enumerate(all_states):
-        print(f"Файл {i+1}: {len(states)} состояний")
+    save_path = os.path.join(output_dir, f'frame_{step:04d}.png')
     
-    max_steps = max(len(states) for states in all_states)
-    print(f"Максимальное количество шагов: {max_steps}")
-    
-    all_values = [val for states in all_states for state in states for val in state]
-    global_max = max(all_values)
-    print(f"Глобальный максимум: {global_max}")
-    
-    for step in range(1, max_steps + 1):
-        create_frame(all_states, step, global_max, output_dir, file_list, max_steps)
-    
-    print(f"Готово! {max_steps} изображений сохранено в папке '{output_dir}'")
-
-if __name__ == '__main__':
-    import sys
+    # 🎬 ВАЖНО: убираем bbox_inches='tight', иначе отступы исчезнут!
+    plt.savefig(save_path, dpi=100, facecolor=fig.get_facecolor())
+    plt.close()    
+def main():
     if len(sys.argv) < 7:
-        print("Использование: python script.py <файл1> <файл2> <файл3> <файл4> <файл5> <файл6> [выходная_папка]")
-        sys.exit(1)
-    input_files = sys.argv[1:7]
-    output_dir = sys.argv[7] if len(sys.argv) > 7 else 'frames'
-    main(input_files, output_dir)
+        print("Нужно 6 файлов. Пример: python script.py 1.txt 2.txt 3.txt 4.txt 5.txt 6.txt")
+        return
+
+    files = sys.argv[1:7]
+    all_states, n = read_all_files(files)
+    
+    max_steps = max(len(s) for s in all_states)
+    # Находим самый большой элемент во всех данных для масштаба
+    global_max = max(max(state) for states in all_states for state in states)
+    
+    print(f"Генерация {max_steps} кадров...")
+    for step in range(1, max_steps + 1):
+        create_frame(all_states, step, global_max, 'frames', files, max_steps)
+        if step % 20 == 0: print(f"Выполнено: {step}/{max_steps}")
+    
+    print("Готово! Проверьте папку 'frames'.")
+
+if __name__ == "__main__":
+    main()

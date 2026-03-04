@@ -197,7 +197,7 @@ void generateLogs(const std::vector<int>& originalArray, const std::string& outp
 }
 
 int main() {
-    const int size = 10;
+    const int size = 30;
     std::vector<int> original(size);
     for (int i = 0; i < size; ++i) {
         original[i] = i + 1;
