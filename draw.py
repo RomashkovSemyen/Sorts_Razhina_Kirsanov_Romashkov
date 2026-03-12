@@ -111,7 +111,6 @@ def create_frame(states_list, step, global_max, output_dir, filenames, max_steps
 def main():
     if len(sys.argv) < 7:
         print("Нужно 6 файлов. Пример: python script.py 1.txt 2.txt 3.txt 4.txt 5.txt 6.txt")
-        print(sys.argv[0])
         return
 
     files = sys.argv[1:7]
